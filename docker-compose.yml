@@ -37,7 +37,7 @@ services:
       start_period: 5s
 
   vector:
-    image: timberio/vector:0.38.0-alpine
+    image: timberio/vector:0.51.1-alpine
     volumes:
       - ./vector/vector.toml:/etc/vector/vector.toml:ro
       - server-logs:/var/log/app:ro

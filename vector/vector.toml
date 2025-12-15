@@ -81,11 +81,11 @@ if !exists(.@timestamp) {
 }
 # Create a unique document ID based on traceId to prevent duplicates
 # For aggregated entries (with traceId), use traceId as the document ID
-# Store in both document_id (for id_key) and _id (for Elasticsearch to recognize)
-# Entries without traceId will not have these set, so Elasticsearch will auto-generate one
+# Store in document_id field (used by id_key configuration)
+# Note: _id is a metadata field and cannot be set in the document body
+# Entries without traceId will not have document_id set, so Elasticsearch will auto-generate one
 if exists(.traceId) && is_string(.traceId) && .traceId != "" {
   .document_id = string!(.traceId)
-  ._id = string!(.traceId)
 }
 '''
 
