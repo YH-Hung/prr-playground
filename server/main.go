@@ -83,7 +83,7 @@ func traceMiddleware(stdoutLogger *log.Logger, fileLogger *log.Logger, next http
 func logJSON(stdoutLogger *log.Logger, fileLogger *log.Logger, entry logEntry) {
 	b, err := json.Marshal(entry)
 	if err != nil {
-		stdoutLogger.Printf(`{"message":"failed to marshal log","error":"%v"}`, err)
+		stdoutLogger.Printf(`{"message":"failed to marshal log","error":"%v"}\n`, err)
 		fileLogger.Printf(`{"message":"failed to marshal log","error":"%v"}\n`, err)
 		return
 	}

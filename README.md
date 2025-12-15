@@ -52,7 +52,7 @@ curl -s "http://localhost:9200/requests-*/_search" \
   -H 'Content-Type: application/json' \
   -d '{"query":{"term":{"traceId.keyword":"<trace>"}}}'
 ```
-- `traceId.keyword` matches the exact trace ID string; this returns all lines (middleware + handler) for that request to demonstrate grouping.
+- Each `traceId` should return exactly **one document** with all log lines combined.
 
 5) Tear down and clean volumes:
 ```sh
@@ -61,7 +61,82 @@ docker compose down -v
 - `down` stops and removes containers.
 - `-v` also removes the named volume holding the server log, ensuring a clean slate for the next run.
 
+## How Log Aggregation Works
+
+This implementation combines multiple log lines from the same request (same `traceId`) into a **single Elasticsearch document** with a multi-line message field. Here's how it works:
+
+### Pipeline Flow
+
+```
+Server Log File → Fluent Bit Tail Input → JSON Parser → Lua Aggregator → Elasticsearch
+```
+
+### Step-by-Step Process
+
+1. **Input** (`[INPUT]` section in `fluent-bit.conf`):
+   - Fluent Bit tails `/var/log/app/app.log` line by line
+   - Each line is tagged as `app` and passed to the filter chain
+
+2. **JSON Parsing** (`[FILTER]` parser):
+   - Parses each log line as JSON
+   - Extracts fields like `traceId`, `message`, `method`, `path`, `status`, `latencyMs`
+   - The parsed record continues to the next filter
+
+3. **Lua Aggregation** (`[FILTER]` lua + `aggregate.lua`):
+   - **Buffering**: Maintains an in-memory buffer keyed by `traceId`
+   - **For each incoming log entry**:
+     - If `traceId` exists in buffer: appends the `message` to the buffer entry's message array
+     - If new `traceId`: creates a new buffer entry
+     - Updates other fields (method, path, status, latencyMs) with latest values
+   - **Suppression**: Returns `-1` to drop intermediate entries (they're buffered, not sent yet)
+   - **Flush trigger**: When a log entry contains `"request completed"`:
+     - Combines all buffered messages with `\n` separator: `message1\nmessage2\n...`
+     - Creates a single combined record with merged fields
+     - Returns `1` to pass the combined record to output
+     - Removes the entry from buffer
+
+4. **Output** (`[OUTPUT]` es):
+   - Only the combined records (one per `traceId`) are sent to Elasticsearch
+   - Each document contains all log lines from that request in a single `message` field
+
+### Example Transformation
+
+**Before aggregation** (multiple log lines):
+```json
+{"traceId": "abc", "message": "handler finished", "method": "GET", "path": "/hello", "status": 200, "latencyMs": 0}
+{"traceId": "abc", "message": "request completed", "method": "GET", "path": "/hello", "status": 200, "latencyMs": 52}
+```
+
+**After aggregation** (single Elasticsearch document):
+```json
+{
+  "traceId": "abc",
+  "message": "handler finished\nrequest completed",
+  "method": "GET",
+  "path": "/hello",
+  "status": 200,
+  "latencyMs": 52
+}
+```
+
+### Key Implementation Details
+
+- **Buffer storage**: The Lua script uses a global `buffer` table to store entries by `traceId`
+- **Return codes**: 
+  - `-1`: Drop/suppress the record (intermediate entries)
+  - `1`: Pass the record through (combined entry or entries without traceId)
+- **Field merging**: Latest values for `status` and `latencyMs` are kept (from the "request completed" entry)
+- **Message combination**: All messages are joined with `\n` to create a multi-line text field
+- **Completion detection**: Uses `string.find()` to detect the "request completed" message pattern
+
+### Configuration Files
+
+- **`fluent-bit/fluent-bit.conf`**: Defines the filter pipeline with Lua filter
+- **`fluent-bit/aggregate.lua`**: Contains the aggregation logic
+- Both files are mounted into the Fluent Bit container via `docker-compose.yml`
+
 ## Notes
 - Server log file is volume-mounted so Fluent Bit and Elasticsearch see the same data.
 - Elasticsearch security is disabled here for brevity; enable auth in real deployments.
+- The Lua buffer is in-memory only; if Fluent Bit restarts, buffered entries may be lost (acceptable for this use case).
 
