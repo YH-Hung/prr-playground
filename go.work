@@ -1,0 +1,11 @@
+go 1.22
+
+use (
+	./internal/config
+	./internal/logger
+	./internal/retry
+	./internal/trace
+	./services/client
+	./services/server
+	./test/integration
+)

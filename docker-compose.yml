@@ -8,7 +8,11 @@ services:
     ports:
       - "9200:9200"
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "curl -sf http://localhost:9200/_cluster/health || exit 1",
+        ]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -17,7 +21,7 @@ services:
   server:
     build:
       context: .
-      dockerfile: server/Dockerfile
+      dockerfile: services/server/Dockerfile
     ports:
       - "${SERVER_PORT:-8080}:${SERVER_PORT:-8080}"
     environment:
@@ -30,7 +34,11 @@ services:
       elasticsearch:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:${SERVER_PORT:-8080}/health || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "wget --quiet --tries=1 --spider http://localhost:${SERVER_PORT:-8080}/health || exit 1",
+        ]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -39,7 +47,7 @@ services:
   vector:
     image: timberio/vector:0.51.1-alpine
     volumes:
-      - ./vector/vector.toml:/etc/vector/vector.toml:ro
+      - ./deployments/vector/vector.toml:/etc/vector/vector.toml:ro
       - server-logs:/var/log/app:ro
     depends_on:
       server:
@@ -49,7 +57,7 @@ services:
   client:
     build:
       context: .
-      dockerfile: client/Dockerfile
+      dockerfile: services/client/Dockerfile
     depends_on:
       server:
         condition: service_healthy
@@ -65,4 +73,3 @@ services:
 
 volumes:
   server-logs:
-

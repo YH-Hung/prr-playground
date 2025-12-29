@@ -1,12 +1,109 @@
-# Vector → Elasticsearch demo (Go server & client)
+# Vector → Elasticsearch demo (Go Monorepo)
 
-This example shows how to log per-request trace IDs, collect logs with Vector, and ship them to Elasticsearch 8 using Docker Compose.
+This example shows how to log per-request trace IDs, collect logs with Vector, and ship them to Elasticsearch 8 using Docker Compose. The project follows Go monorepo best practices with a multi-module workspace structure.
 
 ## What's inside
-- Go HTTP server (`server/`) writing JSON logs with `traceId` to `/var/log/app/app.log` with graceful shutdown, health/metrics endpoints, and configurable settings.
-- Go client (`client/`) sending requests with a fresh `X-Trace-Id` header, featuring exponential backoff retry logic.
+- Go HTTP server (`services/server/`) writing JSON logs with `traceId` to `/var/log/app/app.log` with graceful shutdown, health/metrics endpoints, and configurable settings.
+- Go client (`services/client/`) sending requests with a fresh `X-Trace-Id` header, featuring exponential backoff retry logic.
+- Shared internal packages (`internal/`) for configuration, tracing, logging, and retry logic.
 - Vector tailing the server log with native stateful aggregation and forwarding to Elasticsearch + stdout with retry configuration.
 - Elasticsearch 8 single node with security disabled for simplicity.
+
+## Project Structure
+
+This project follows Go monorepo best practices using Go workspaces:
+
+```
+prr-playground/
+├── go.work                           # Workspace file (coordinates all modules)
+├── services/                         # Service modules
+│   ├── server/                      # HTTP server service
+│   │   ├── go.mod                   # Independent module
+│   │   ├── main.go                  # Entry point
+│   │   ├── Dockerfile
+│   │   └── internal/                # Server-specific code
+│   │       ├── handlers/            # HTTP handlers
+│   │       ├── middleware/          # HTTP middleware
+│   │       └── metrics/             # Metrics collection
+│   └── client/                      # HTTP client service
+│       ├── go.mod                   # Independent module
+│       ├── main.go                  # Entry point
+│       ├── Dockerfile
+│       └── internal/                # Client-specific code
+│           └── worker/              # Worker pool logic
+├── internal/                         # Shared packages (no go.mod)
+│   ├── config/                      # Environment variable parsing
+│   ├── trace/                       # Trace ID generation
+│   ├── logger/                      # Structured JSON logging
+│   └── retry/                       # Exponential backoff retry
+├── test/integration/                 # Integration tests
+│   ├── go.mod
+│   └── integration_test.go
+├── deployments/vector/              # Deployment configurations
+│   └── vector.toml
+├── docker-compose.yml
+├── Makefile                         # Build automation
+├── .golangci.yml                    # Linter configuration
+└── README.md
+
+```
+
+### Module Organization
+
+The project uses Go workspaces (Go 1.18+) for multi-module coordination:
+- **3 Independent Modules**: `services/server`, `services/client`, `test/integration`
+- **Shared Code**: `internal/` packages (no separate module)
+- **Workspace Benefits**: No `replace` directives needed, clean local development
+
+## Building and Testing
+
+### Prerequisites
+- Go 1.22+
+- Docker and Docker Compose
+- golangci-lint (optional, for linting)
+
+### Using Make
+
+```bash
+# Build all services
+make build
+
+# Build individual services
+make build-server
+make build-client
+
+# Run tests
+make test                  # All tests
+make test-server          # Server tests only
+make test-client          # Client tests only
+make test-integration     # Integration tests
+
+# Code quality
+make lint                 # Run linter
+make coverage            # Generate coverage report
+make fmt                 # Format code
+
+# Docker operations
+make docker-build        # Build images
+make docker-up           # Start services
+make docker-down         # Stop services
+
+# Cleanup
+make clean               # Remove build artifacts
+```
+
+### Manual Build
+
+```bash
+# Build server
+cd services/server && go build -o ../../bin/server
+
+# Build client
+cd services/client && go build -o ../../bin/client
+
+# Run tests
+go test ./internal/... ./services/... ./test/...
+```
 
 ## Features
 
@@ -246,11 +343,32 @@ Server Log File → Vector File Input → JSON Parser → Reduce Transform → E
 
 Run unit tests:
 ```sh
-# Server tests
-go test ./server/... -v
+# All tests
+make test
 
-# Client tests (requires network access for integration tests)
-go test ./client/... -v
+# Server tests
+make test-server
+
+# Client tests
+make test-client
+
+# Integration tests
+make test-integration
+
+# With coverage
+make coverage
+```
+
+Or manually:
+```sh
+# All tests
+go test ./internal/... ./services/... ./test/...
+
+# Server tests
+cd services/server && go test ./... -v
+
+# Client tests
+cd services/client && go test ./... -v
 ```
 
 ## Notes

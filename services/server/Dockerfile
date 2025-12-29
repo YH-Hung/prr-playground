@@ -1,23 +1,35 @@
 FROM golang:1.22-alpine AS builder
 
-WORKDIR /app
+WORKDIR /build
 
-# Copy dependency files first for better layer caching
-COPY go.mod go.sum ./
-RUN go mod download
+# Copy workspace and all module files for dependency resolution
+COPY go.work go.work
+COPY services/server/go.mod services/server/
+COPY services/client/go.mod services/client/
+COPY test/integration/go.mod test/integration/
+COPY internal/config/go.mod internal/config/
+COPY internal/trace/go.mod internal/trace/
+COPY internal/logger/go.mod internal/logger/
+COPY internal/retry/go.mod internal/retry/
 
-# Copy source code
-COPY server ./server
+# Copy internal packages (shared code)
+COPY internal/ internal/
+
+# Download dependencies
+RUN cd services/server && go mod download
+
+# Copy server source code
+COPY services/server/ services/server/
 
 # Build binary
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /server ./server
+RUN cd services/server && CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/server
 
 FROM alpine:3.20
 
 # Add metadata labels
 LABEL maintainer="prr-playground"
 LABEL description="HTTP server with trace logging"
-LABEL version="1.0"
+LABEL version="2.0"
 
 # Install wget for healthcheck
 RUN apk add --no-cache wget
@@ -26,11 +38,11 @@ RUN apk add --no-cache wget
 RUN addgroup -g 1000 appuser && \
     adduser -D -u 1000 -G appuser appuser
 
-# Create log directory (permissions will be fixed by entrypoint if volume mounted)
+# Create log directory
 RUN mkdir -p /var/log/app
 
 # Copy binary from builder
-COPY --from=builder /server /server
+COPY --from=builder /app/server /server
 
 # Create entrypoint script to fix permissions
 RUN echo '#!/bin/sh' > /entrypoint.sh && \
@@ -43,9 +55,8 @@ RUN apk add --no-cache su-exec
 
 EXPOSE 8080
 
-# Health check (can be overridden in docker-compose)
+# Health check
 HEALTHCHECK --interval=10s --timeout=5s --start-period=5s --retries=3 \
     CMD wget --quiet --tries=1 --spider http://localhost:8080/health || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]
-

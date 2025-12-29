@@ -36,3 +36,9 @@ coverage.*
 # Environment files
 .env
 .env.*
+
+# Go workspace
+go.work.sum
+
+# Coverage reports
+coverage.html
