@@ -14,17 +14,27 @@ max_line_bytes = 10485760  # 10MB (equivalent to Fluent Bit Mem_Buf_Limit)
 type = "remap"
 inputs = ["app_logs"]
 source = '''
-# Parse the log line as JSON and merge with existing fields
-# Use fallible parsing to handle malformed JSON gracefully
-parsed, err = parse_json(string!(.message))
-if err == null && parsed != null {
-  . = merge!(., parsed)
-  # Mark as successfully parsed
-  ._parsed = true
+# Extract JSON part from log line (skip timestamp prefix)
+# Log format: "2025/12/29 17:09:24 {json...}"
+line = string!(.message)
+# Split on space and take everything after the second space (timestamp + space + JSON)
+parts = split(line, " ", 3)
+if length(parts) >= 3 {
+  json_str = parts[2]
+  parsed, err = parse_json(json_str)
+  if err == null && parsed != null {
+    . = merge!(., parsed)
+    # Mark as successfully parsed
+    ._parsed = true
+  } else {
+    # If JSON parsing fails, mark for dropping
+    ._parsed = false
+    .parse_error = "invalid_json"
+  }
 } else {
-  # If JSON parsing fails, mark for dropping
+  # Not enough parts
   ._parsed = false
-  .parse_error = "invalid_json"
+  .parse_error = "invalid_format"
 }
 # Ensure traceId is a string (empty string if missing)
 .traceId = string(.traceId) ?? ""
