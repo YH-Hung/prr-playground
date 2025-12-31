@@ -3,9 +3,9 @@
 This example shows how to log per-request trace IDs, collect logs with Vector, and ship them to Elasticsearch 8 using Docker Compose. The project follows Go monorepo best practices with a multi-module workspace structure.
 
 ## What's inside
-- Go HTTP server (`services/server/`) writing JSON logs with `traceId` to `/var/log/app/app.log` with graceful shutdown, health/metrics endpoints, and configurable settings.
-- Go client (`services/client/`) sending requests with a fresh `X-Trace-Id` header, featuring exponential backoff retry logic.
-- Shared internal packages (`internal/`) for configuration, tracing, logging, and retry logic.
+- Go HTTP server (`log-parsing-forwarding/services/server/`) writing JSON logs with `traceId` to `/var/log/app/app.log` with graceful shutdown, health/metrics endpoints, and configurable settings.
+- Go client (`log-parsing-forwarding/services/client/`) sending requests with a fresh `X-Trace-Id` header, featuring exponential backoff retry logic.
+- Shared internal packages (`log-parsing-forwarding/internal/`) for configuration, tracing, logging, and retry logic.
 - Vector tailing the server log with native stateful aggregation and forwarding to Elasticsearch + stdout with retry configuration.
 - Elasticsearch 8 single node with security disabled for simplicity.
 
@@ -16,34 +16,37 @@ This project follows Go monorepo best practices using Go workspaces:
 ```
 prr-playground/
 ├── go.work                           # Workspace file (coordinates all modules)
-├── services/                         # Service modules
-│   ├── server/                      # HTTP server service
-│   │   ├── go.mod                   # Independent module
-│   │   ├── main.go                  # Entry point
-│   │   ├── Dockerfile
-│   │   └── internal/                # Server-specific code
-│   │       ├── handlers/            # HTTP handlers
-│   │       ├── middleware/          # HTTP middleware
-│   │       └── metrics/             # Metrics collection
-│   └── client/                      # HTTP client service
-│       ├── go.mod                   # Independent module
-│       ├── main.go                  # Entry point
-│       ├── Dockerfile
-│       └── internal/                # Client-specific code
-│           └── worker/              # Worker pool logic
-├── internal/                         # Shared packages (no go.mod)
-│   ├── config/                      # Environment variable parsing
-│   ├── trace/                       # Trace ID generation
-│   ├── logger/                      # Structured JSON logging
-│   └── retry/                       # Exponential backoff retry
-├── test/integration/                 # Integration tests
-│   ├── go.mod
-│   └── integration_test.go
-├── deployments/vector/              # Deployment configurations
-│   └── vector.toml
 ├── docker-compose.yml
 ├── Makefile                         # Build automation
-├── .golangci.yml                    # Linter configuration
+├── log-parsing-forwarding/          # Log parsing and forwarding project
+│   ├── services/                    # Service modules
+│   │   ├── server/                  # HTTP server service
+│   │   │   ├── go.mod               # Independent module
+│   │   │   ├── main.go              # Entry point
+│   │   │   ├── Dockerfile
+│   │   │   └── internal/            # Server-specific code
+│   │   │       ├── handlers/        # HTTP handlers
+│   │   │       ├── middleware/      # HTTP middleware
+│   │   │       └── metrics/         # Metrics collection
+│   │   └── client/                  # HTTP client service
+│   │       ├── go.mod               # Independent module
+│   │       ├── main.go              # Entry point
+│   │       ├── Dockerfile
+│   │       └── internal/            # Client-specific code
+│   │           └── worker/          # Worker pool logic
+│   ├── internal/                    # Shared packages (no go.mod)
+│   │   ├── config/                    # Environment variable parsing
+│   │   ├── trace/                    # Trace ID generation
+│   │   ├── logger/                   # Structured JSON logging
+│   │   └── retry/                    # Exponential backoff retry
+│   ├── test/integration/             # Integration tests
+│   │   ├── go.mod
+│   │   └── integration_test.go
+│   ├── deployments/vector/            # Deployment configurations
+│   │   └── vector.toml
+│   ├── .gitignore
+│   └── .golangci.yml                 # Linter configuration
+├── metrics-alert-template/            # Metrics and alert templates (placeholder)
 └── README.md
 
 ```
@@ -51,8 +54,8 @@ prr-playground/
 ### Module Organization
 
 The project uses Go workspaces (Go 1.18+) for multi-module coordination:
-- **3 Independent Modules**: `services/server`, `services/client`, `test/integration`
-- **Shared Code**: `internal/` packages (no separate module)
+- **3 Independent Modules**: `log-parsing-forwarding/services/server`, `log-parsing-forwarding/services/client`, `log-parsing-forwarding/test/integration`
+- **Shared Code**: `log-parsing-forwarding/internal/` packages (no separate module)
 - **Workspace Benefits**: No `replace` directives needed, clean local development
 
 ## Building and Testing
@@ -96,13 +99,13 @@ make clean               # Remove build artifacts
 
 ```bash
 # Build server
-cd services/server && go build -o ../../bin/server
+cd log-parsing-forwarding/services/server && go build -o ../../../bin/server
 
 # Build client
-cd services/client && go build -o ../../bin/client
+cd log-parsing-forwarding/services/client && go build -o ../../../bin/client
 
 # Run tests
-go test ./internal/... ./services/... ./test/...
+go test ./log-parsing-forwarding/internal/... ./log-parsing-forwarding/services/... ./log-parsing-forwarding/test/...
 ```
 
 ## Features
@@ -362,13 +365,13 @@ make coverage
 Or manually:
 ```sh
 # All tests
-go test ./internal/... ./services/... ./test/...
+go test ./log-parsing-forwarding/internal/... ./log-parsing-forwarding/services/... ./log-parsing-forwarding/test/...
 
 # Server tests
-cd services/server && go test ./... -v
+cd log-parsing-forwarding/services/server && go test ./... -v
 
 # Client tests
-cd services/client && go test ./... -v
+cd log-parsing-forwarding/services/client && go test ./... -v
 ```
 
 ## Notes
