@@ -1,0 +1,214 @@
+groups:
+  - name: spring_webapi_db_alerts
+    interval: 30s
+    rules:
+      # High Error Rate Alert
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(http_server_requests_total{status=~"5.."}[5m])) by (application, uri, method)
+            /
+            sum(rate(http_server_requests_total[5m])) by (application, uri, method)
+          ) * 100 > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: http
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value }}% for {{ $labels.method }} {{ $labels.uri }} (threshold: 5%)"
+
+      # High Latency Alert (p95)
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_server_requests_seconds_bucket[5m])) by (le, application, uri, method)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: http
+        annotations:
+          summary: "High latency detected"
+          description: "p95 latency is {{ $value }}s for {{ $labels.method }} {{ $labels.uri }} (threshold: 1s)"
+
+      # Database Connection Failure
+      - alert: DatabaseDown
+        expr: |
+          up{job="spring-webapi-db"} == 0
+          OR
+          spring_datasource_hikari_connections_active{job="spring-webapi-db"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "Database connection failure"
+          description: "Database connection is down or no active connections available"
+
+      # Database Health Check Failure
+      - alert: DatabaseHealthCheckFailure
+        expr: |
+          health_status{component="db"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "Database health check failed"
+          description: "Database health indicator is reporting DOWN status"
+
+      # JVM Memory Pressure
+      - alert: HighMemoryUsage
+        expr: |
+          (
+            jvm_memory_used_bytes{area="heap", job="spring-webapi-db"}
+            /
+            jvm_memory_max_bytes{area="heap", job="spring-webapi-db"}
+          ) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          component: jvm
+        annotations:
+          summary: "High JVM memory usage"
+          description: "JVM heap usage is {{ $value }}% (threshold: 85%)"
+
+      # Critical Memory Usage
+      - alert: CriticalMemoryUsage
+        expr: |
+          (
+            jvm_memory_used_bytes{area="heap", job="spring-webapi-db"}
+            /
+            jvm_memory_max_bytes{area="heap", job="spring-webapi-db"}
+          ) * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+          component: jvm
+        annotations:
+          summary: "Critical JVM memory usage"
+          description: "JVM heap usage is {{ $value }}% (threshold: 95%) - immediate action required"
+
+      # High Request Rate (Sudden Spike)
+      - alert: HighRequestRate
+        expr: |
+          (
+            sum(rate(http_server_requests_total[5m])) by (application)
+            /
+            sum(rate(http_server_requests_total[15m] offset 5m)) by (application)
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+          component: http
+        annotations:
+          summary: "High request rate spike detected"
+          description: "Request rate is {{ $value }}x higher than baseline"
+
+      # Service Unavailable
+      - alert: ServiceUnavailable
+        expr: |
+          up{job="spring-webapi-db"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: service
+        annotations:
+          summary: "Service unavailable"
+          description: "Spring Boot application is not responding"
+
+      # Health Endpoint Down
+      - alert: HealthEndpointDown
+        expr: |
+          health_status{component="custom"} == 0
+          OR
+          health_status{component="diskSpace"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          component: health
+        annotations:
+          summary: "Health endpoint reporting issues"
+          description: "Health check component {{ $labels.component }} is reporting DOWN status"
+
+      # Connection Pool Exhaustion
+      - alert: ConnectionPoolExhaustion
+        expr: |
+          (
+            spring_datasource_hikari_connections_active{job="spring-webapi-db"}
+            /
+            spring_datasource_hikari_connections_max{job="spring-webapi-db"}
+          ) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Database connection pool near exhaustion"
+          description: "Connection pool usage is {{ $value }}% (threshold: 90%)"
+
+      # High GC Pause Time
+      - alert: HighGCPauseTime
+        expr: |
+          rate(jvm_gc_pause_seconds_sum{job="spring-webapi-db"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: jvm
+        annotations:
+          summary: "High GC pause time"
+          description: "GC pause time is {{ $value }}s per second (threshold: 0.1s)"
+
+      # Custom Business Metrics - High Error Rate
+      - alert: HighBusinessOperationErrorRate
+        expr: |
+          (
+            sum(rate(custom_user_operation_errors_total[5m])) by (application)
+            /
+            sum(rate(custom_user_operation_duration_count[5m])) by (application)
+          ) * 100 > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: business
+        annotations:
+          summary: "High business operation error rate"
+          description: "Business operation error rate is {{ $value }}% (threshold: 10%)"
+
+      # External Service Call Failures
+      - alert: ExternalServiceCallFailures
+        expr: |
+          rate(custom_external_call_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: external
+        annotations:
+          summary: "External service call failures"
+          description: "External service {{ $labels.service }} is failing at {{ $value }} errors/sec"
+
+      # Disk Space Low
+      - alert: DiskSpaceLow
+        expr: |
+          disk_free_bytes / disk_total_bytes < 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: disk
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space is below 10% ({{ $value }}% free)"
+
+      # Critical Disk Space
+      - alert: CriticalDiskSpace
+        expr: |
+          disk_free_bytes / disk_total_bytes < 0.05
+        for: 2m
+        labels:
+          severity: critical
+          component: disk
+        annotations:
+          summary: "Critical disk space"
+          description: "Disk space is below 5% ({{ $value }}% free) - immediate action required"
+
