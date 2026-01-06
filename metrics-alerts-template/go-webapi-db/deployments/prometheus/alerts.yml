@@ -1,0 +1,268 @@
+groups:
+  - name: go_webapi_db_alerts
+    interval: 30s
+    rules:
+      # High Error Rate Alert
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(http_server_requests_total{status=~"5.."}[5m])) by (uri, method)
+            /
+            sum(rate(http_server_requests_total[5m])) by (uri, method)
+          ) * 100 > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: http
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value }}% for {{ $labels.method }} {{ $labels.uri }} (threshold: 5%)"
+
+      # High Latency Alert (p95)
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_server_requests_seconds_bucket[5m])) by (le, uri, method)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: http
+        annotations:
+          summary: "High latency detected"
+          description: "p95 latency is {{ $value }}s for {{ $labels.method }} {{ $labels.uri }} (threshold: 1s)"
+
+      # Database Connection Failure
+      - alert: DatabaseDown
+        expr: |
+          up{job="go-webapi-db"} == 0
+          OR
+          health_status{component="db"} == 0
+          OR
+          mongodb_connections_active{job="go-webapi-db"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "Database connection failure"
+          description: "Database connection is down or health check is failing"
+
+      # MongoDB Connection Pool Exhaustion
+      - alert: MongoDBConnectionPoolExhaustion
+        expr: |
+          (
+            mongodb_connections_active{job="go-webapi-db"}
+            /
+            mongodb_connections_max{job="go-webapi-db"}
+          ) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "MongoDB connection pool near exhaustion"
+          description: "MongoDB connection pool usage is {{ $value }}% (threshold: 90%)"
+
+      # MongoDB Connection Timeouts
+      - alert: MongoDBConnectionTimeouts
+        expr: |
+          rate(mongodb_connection_timeouts_total{job="go-webapi-db"}[5m]) > 0
+        for: 2m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "MongoDB connection acquisition timeouts"
+          description: "MongoDB connection pool is exhausted - {{ $value }} timeouts/sec"
+
+      # High MongoDB Operation Error Rate
+      - alert: HighMongoDBOperationErrorRate
+        expr: |
+          (
+            sum(rate(mongodb_operation_errors_total{job="go-webapi-db"}[5m])) by (operation, collection)
+            /
+            sum(rate(mongodb_operations_total{job="go-webapi-db"}[5m])) by (operation, collection)
+          ) * 100 > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "High MongoDB operation error rate"
+          description: "MongoDB {{ $labels.operation }} error rate is {{ $value }}% for collection {{ $labels.collection }} (threshold: 5%)"
+
+      # High MongoDB Operation Latency
+      - alert: HighMongoDBOperationLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(mongodb_operation_duration_seconds_bucket{job="go-webapi-db"}[5m])) by (le, operation, collection)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "High MongoDB operation latency"
+          description: "p95 latency is {{ $value }}s for {{ $labels.operation }} on {{ $labels.collection }} (threshold: 1s)"
+
+      # MongoDB Connection Errors
+      - alert: MongoDBConnectionErrors
+        expr: |
+          rate(mongodb_connection_errors_total{job="go-webapi-db"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "MongoDB connection errors"
+          description: "MongoDB connection errors at {{ $value }} errors/sec (error type: {{ $labels.error_type }})"
+
+      # Database Health Check Failure
+      - alert: DatabaseHealthCheckFailure
+        expr: |
+          health_status{component="db"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "Database health check failed"
+          description: "Database health indicator is reporting DOWN status"
+
+      # High Memory Usage (Go runtime)
+      - alert: HighMemoryUsage
+        expr: |
+          (
+            go_memstats_heap_inuse_bytes{job="go-webapi-db"}
+            /
+            go_memstats_heap_sys_bytes{job="go-webapi-db"}
+          ) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          component: memory
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }}% (threshold: 85%)"
+
+      # Critical Memory Usage
+      - alert: CriticalMemoryUsage
+        expr: |
+          (
+            go_memstats_heap_inuse_bytes{job="go-webapi-db"}
+            /
+            go_memstats_heap_sys_bytes{job="go-webapi-db"}
+          ) * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+          component: memory
+        annotations:
+          summary: "Critical memory usage"
+          description: "Memory usage is {{ $value }}% (threshold: 95%) - immediate action required"
+
+      # High Request Rate (Sudden Spike)
+      - alert: HighRequestRate
+        expr: |
+          (
+            sum(rate(http_server_requests_total[5m])) by (uri)
+            /
+            sum(rate(http_server_requests_total[15m] offset 5m)) by (uri)
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+          component: http
+        annotations:
+          summary: "High request rate spike detected"
+          description: "Request rate is {{ $value }}x higher than baseline for {{ $labels.uri }}"
+
+      # Service Unavailable
+      - alert: ServiceUnavailable
+        expr: |
+          up{job="go-webapi-db"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: service
+        annotations:
+          summary: "Service unavailable"
+          description: "Go web API application is not responding"
+
+      # Health Endpoint Down
+      - alert: HealthEndpointDown
+        expr: |
+          health_status{component="db"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          component: health
+        annotations:
+          summary: "Health endpoint reporting issues"
+          description: "Health check component {{ $labels.component }} is reporting DOWN status"
+
+      # High GC Pause Time
+      - alert: HighGCPauseTime
+        expr: |
+          rate(go_memstats_gc_duration_seconds_sum{job="go-webapi-db"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: gc
+        annotations:
+          summary: "High GC pause time"
+          description: "GC pause time is {{ $value }}s per second (threshold: 0.1s)"
+
+      # Custom Business Metrics - High Error Rate
+      - alert: HighBusinessOperationErrorRate
+        expr: |
+          (
+            sum(rate(custom_user_operation_errors_total[5m])) by (application)
+            /
+            sum(rate(custom_user_operation_duration_seconds_count[5m])) by (application)
+          ) * 100 > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: business
+        annotations:
+          summary: "High business operation error rate"
+          description: "Business operation error rate is {{ $value }}% (threshold: 10%)"
+
+      # External Service Call Failures
+      - alert: ExternalServiceCallFailures
+        expr: |
+          rate(custom_external_call_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: external
+        annotations:
+          summary: "External service call failures"
+          description: "External service {{ $labels.service }} is failing at {{ $value }} errors/sec"
+
+      # High Goroutine Count
+      - alert: HighGoroutineCount
+        expr: |
+          go_goroutines{job="go-webapi-db"} > 1000
+        for: 5m
+        labels:
+          severity: warning
+          component: goroutines
+        annotations:
+          summary: "High goroutine count"
+          description: "Goroutine count is {{ $value }} (threshold: 1000)"
+
+      # Process File Descriptors
+      - alert: HighFileDescriptors
+        expr: |
+          process_open_fds{job="go-webapi-db"} / process_max_fds{job="go-webapi-db"} > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          component: process
+        annotations:
+          summary: "High file descriptor usage"
+          description: "File descriptor usage is {{ $value }}% (threshold: 90%)"
+

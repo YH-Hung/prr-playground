@@ -1,11 +1,15 @@
 # Metrics and Alerts Template
 
-A comprehensive observability template for Spring Boot applications featuring Prometheus metrics collection, Grafana dashboards, and Alertmanager alerting. This template provides production-ready monitoring and alerting configurations for Spring Boot REST APIs with database connectivity.
+A comprehensive observability template for web applications featuring Prometheus metrics collection, Grafana dashboards, and Alertmanager alerting. This template provides production-ready monitoring and alerting configurations for REST APIs with database connectivity across multiple technology stacks.
 
 ## Overview
 
-This template includes:
-- **Spring Boot Application** with comprehensive Prometheus metrics instrumentation
+This template includes reference implementations for different technology stacks, each demonstrating how to implement comprehensive observability:
+
+- **Spring Boot** (`spring-webapi-db`) - Java/Spring Boot application with PostgreSQL
+- **Go/Gin** (`go-webapi-db`) - Go application with MongoDB
+
+Each implementation includes:
 - **Prometheus** for metrics collection and alert rule evaluation
 - **Grafana** with pre-configured dashboards and datasources
 - **Alertmanager** for alert routing and notification management
@@ -16,78 +20,75 @@ This template includes:
 
 ```
 metrics-alerts-template/
-└── spring-webapi-db/
-    ├── src/                          # Spring Boot application source code
-    │   ├── main/
-    │   │   ├── java/
-    │   │   │   └── org/hle/springwebapidb/
-    │   │   │       ├── config/       # Metrics and web configuration
-    │   │   │       ├── controller/   # REST controllers
-    │   │   │       ├── service/      # Business logic and metrics
-    │   │   │       ├── repository/   # JPA repositories
-    │   │   │       ├── entity/       # JPA entities
-    │   │   │       ├── interceptor/  # HTTP metrics interceptor
-    │   │   │       └── exception/    # Global exception handler
-    │   │   └── resources/
-    │   │       └── application.properties
-    │   └── test/                     # Unit and integration tests
-    ├── deployments/                  # Deployment configurations
-    │   ├── prometheus/
-    │   │   ├── prometheus.yml        # Prometheus configuration
-    │   │   └── alerts.yml            # Alert rules
-    │   ├── alertmanager/
-    │   │   └── alertmanager.yml      # Alert routing and notifications
-    │   └── grafana/
-    │       └── provisioning/         # Auto-provisioned dashboards and datasources
-    │           ├── datasources/
-    │           │   └── prometheus.yml
-    │           └── dashboards/
-    │               └── dashboard.yml
-    ├── docker-compose.metrics.yml    # Docker Compose for monitoring stack
-    ├── METRICS_DOCUMENTATION.md      # Comprehensive metrics documentation
-    ├── HELP.md                       # Spring Boot getting started guide
-    └── pom.xml                       # Maven project configuration
+├── spring-webapi-db/            # Spring Boot (Java) implementation
+│   ├── src/                      # Application source code
+│   ├── deployments/              # Prometheus, Grafana, Alertmanager configs
+│   ├── docker-compose.metrics.yml
+│   └── README.md                 # Spring Boot specific documentation
+│
+├── go-webapi-db/                 # Go/Gin implementation
+│   ├── cmd/                      # Application entry points
+│   ├── internal/                 # Application code
+│   ├── deployments/              # Prometheus, Grafana, Alertmanager configs
+│   ├── docker-compose.metrics.yml
+│   └── README.md                 # Go specific documentation
+│
+└── README.md                     # This file (tech-agnostic overview)
 ```
 
 ## Features
 
 ### Metrics Collection
+
+All implementations provide comprehensive metrics covering:
+
 - **Application Metrics**: Startup time, readiness, custom business metrics
 - **HTTP Metrics**: Request rate, latency (p50, p95, p99), error rates, status codes
-- **Database Metrics**: Connection pool utilization, active/idle connections, timeouts
-- **JVM Metrics**: Memory usage, GC pauses, thread counts, class loading
+- **Database Metrics**: Connection pool utilization, active/idle connections, operation metrics
+- **Runtime Metrics**: Memory usage, CPU, garbage collection (language-specific)
 - **System Metrics**: CPU usage, disk space, file descriptors
-- **Custom Business Metrics**: User operations, external service calls, error tracking
+- **Custom Business Metrics**: Domain-specific operations, external service calls, error tracking
 
 ### Alerting
-- **High Error Rate**: Alert when error rate exceeds 5%
-- **High Latency**: Alert when p95 latency exceeds 1 second
+
+Pre-configured alert rules cover common failure scenarios:
+
+- **High Error Rate**: Alert when error rate exceeds threshold
+- **High Latency**: Alert when p95 latency exceeds threshold
 - **Database Issues**: Connection failures, pool exhaustion, health check failures
-- **Memory Pressure**: JVM heap usage warnings (85%) and critical alerts (95%)
+- **Memory Pressure**: Memory usage warnings and critical alerts
 - **Service Availability**: Service down, health endpoint failures
-- **Resource Exhaustion**: Disk space, connection pool, thread pool saturation
+- **Resource Exhaustion**: Disk space, connection pool, thread/goroutine saturation
 - **Business Metrics**: High business operation error rates, external service failures
 
 ### Dashboards
+
 - Pre-configured Grafana dashboards for application monitoring
 - Auto-provisioned datasources connecting to Prometheus
 - Ready-to-use visualization templates
 
 ## Prerequisites
 
-- **Java 25+** (or compatible JDK)
-- **Maven 3.6+**
-- **Docker and Docker Compose**
-- **PostgreSQL** (for the Spring Boot application database)
+- **Docker and Docker Compose** (for running the monitoring stack)
+- **Technology-specific prerequisites** (see individual project READMEs):
+  - Spring Boot: Java 25+, Maven 3.6+, PostgreSQL
+  - Go: Go 1.21+, MongoDB
 
 ## Quick Start
 
-### 1. Start the Monitoring Stack
+### 1. Choose Your Technology Stack
 
-Start Prometheus, Grafana, and Alertmanager:
+Select one of the reference implementations:
+
+- **[Spring Boot](spring-webapi-db/README.md)** - Java/Spring Boot with PostgreSQL
+- **[Go/Gin](go-webapi-db/README.md)** - Go with MongoDB
+
+### 2. Start the Monitoring Stack
+
+Each implementation includes a Docker Compose file to start the monitoring infrastructure:
 
 ```bash
-cd spring-webapi-db
+cd <project-directory>
 docker compose -f docker-compose.metrics.yml up -d
 ```
 
@@ -95,45 +96,39 @@ This will start:
 - **Prometheus** on `http://localhost:9090`
 - **Grafana** on `http://localhost:3000` (admin/admin)
 - **Alertmanager** on `http://localhost:9093`
+- **Database** (PostgreSQL or MongoDB depending on implementation)
 
-### 2. Configure Prometheus Target
+### 3. Configure Prometheus Target
 
-The Spring Boot application needs to be accessible to Prometheus. Update `deployments/prometheus/prometheus.yml` to point to your application:
+Update `deployments/prometheus/prometheus.yml` to point to your application:
 
 ```yaml
 scrape_configs:
-  - job_name: 'spring-webapi-db'
+  - job_name: '<application-name>'
+    metrics_path: '/metrics'  # or '/actuator/prometheus' for Spring Boot
     static_configs:
-      - targets: ['host.docker.internal:8080']  # Update this to your app's host:port
+      - targets: ['host.docker.internal:8080']  # Update to your app's host:port
 ```
 
-If running the application locally, use `host.docker.internal:8080`. For Docker networks, use the service name and port.
+### 4. Build and Run Your Application
 
-### 3. Build and Run the Spring Boot Application
+Follow the technology-specific instructions in each project's README:
+- [Spring Boot Quick Start](spring-webapi-db/README.md#quick-start)
+- [Go Quick Start](go-webapi-db/README.md#quick-start)
 
-```bash
-# Build the application
-mvn clean package
-
-# Run the application
-java -jar target/spring-webapi-db-0.0.1-SNAPSHOT.jar
-```
-
-Or use Maven:
-
-```bash
-mvn spring-boot:run
-```
-
-### 4. Verify Metrics Endpoint
+### 5. Verify Metrics Endpoint
 
 Check that metrics are being exposed:
 
 ```bash
+# For Spring Boot
 curl http://localhost:8080/actuator/prometheus
+
+# For Go
+curl http://localhost:8080/metrics
 ```
 
-### 5. Access Grafana
+### 6. Access Grafana
 
 1. Open `http://localhost:3000`
 2. Login with `admin` / `admin`
@@ -142,138 +137,65 @@ curl http://localhost:8080/actuator/prometheus
 
 ## Configuration
 
-### Application Configuration
-
-Edit `src/main/resources/application.properties`:
-
-```properties
-# Application name
-spring.application.name=spring-webapi-db
-
-# Database configuration
-spring.datasource.url=jdbc:postgresql://localhost:5432/postgres
-spring.datasource.username=postgres
-spring.datasource.password=postgres
-
-# Actuator endpoints
-management.endpoints.web.exposure.include=health,metrics,prometheus,info
-management.endpoint.health.show-details=always
-management.prometheus.metrics.export.enabled=true
-
-# Metrics tags
-management.metrics.tags.application=${spring.application.name}
-```
-
 ### Prometheus Configuration
 
-Edit `deployments/prometheus/prometheus.yml`:
+Each project includes a `deployments/prometheus/prometheus.yml` with:
 
-```yaml
-global:
-  scrape_interval: 15s
-  evaluation_interval: 15s
-
-scrape_configs:
-  - job_name: 'spring-webapi-db'
-    metrics_path: '/actuator/prometheus'
-    static_configs:
-      - targets: ['host.docker.internal:8080']
-```
+- Global scrape and evaluation intervals
+- Scrape configuration for the application
+- Alert rule file references
 
 ### Alert Rules
 
-Edit `deployments/prometheus/alerts.yml` to customize alert thresholds:
+Each project includes `deployments/prometheus/alerts.yml` with pre-configured alerts for:
 
-```yaml
-groups:
-  - name: spring_webapi_db_alerts
-    rules:
-      - alert: HighErrorRate
-        expr: |
-          (sum(rate(http_server_requests_total{status=~"5.."}[5m])) 
-           / sum(rate(http_server_requests_total[5m]))) * 100 > 5
-        for: 5m
-        annotations:
-          summary: "High error rate detected"
-```
+- Service availability
+- Error rates and latency
+- Database connectivity
+- Resource exhaustion
+- Business metrics
 
 ### Alertmanager Configuration
 
-Edit `deployments/alertmanager/alertmanager.yml` to configure notification channels:
+Each project includes `deployments/alertmanager/alertmanager.yml` for configuring:
 
-```yaml
-receivers:
-  - name: 'critical-receiver'
-    webhook_configs:
-      - url: 'http://your-webhook-url/webhook'
-    # email_configs:
-    #   - to: 'admin@example.com'
-    #     from: 'alertmanager@example.com'
-    #     smarthost: 'smtp.example.com:587'
-```
+- Alert routing and grouping
+- Notification channels (webhooks, email, Slack)
+- Silence rules
 
-## Available Metrics
+### Grafana Provisioning
 
-### Application Metrics
-- `application_ready_time_seconds` - Application readiness time
-- `application_started_time_seconds` - Application startup time
+Each project includes Grafana provisioning configuration for:
 
-### Custom Business Metrics
-- `custom_user_total` - Total users created
-- `custom_user_updated_total` - Total users updated
-- `custom_user_deleted_total` - Total users deleted
-- `custom_user_active_operations` - Current active operations
-- `custom_user_operation_duration_seconds` - Operation duration (p50, p95, p99)
-- `custom_user_operation_errors_total` - Operation errors by type
-- `custom_external_call_duration_seconds` - External service call duration
-- `custom_external_call_errors_total` - External service call failures
+- Prometheus datasource auto-configuration
+- Dashboard auto-loading
 
-### HTTP Metrics
-- `http_server_requests_seconds` - Request duration histogram
-- `http_server_requests_total` - Total request count
-- `http_server_errors_total` - Server error count (5xx)
-- `http_server_client_errors_total` - Client error count (4xx)
+## Common Metrics Patterns
 
-### Database Metrics (HikariCP)
-- `hikaricp_connections` - Total connections in pool
-- `hikaricp_connections_active` - Active connections
-- `hikaricp_connections_idle` - Idle connections
-- `hikaricp_connections_pending` - Threads waiting for connections
-- `hikaricp_connections_timeout_total` - Connection acquisition timeouts
+While metric names may vary by technology stack, the following patterns are consistent:
 
-### JVM Metrics
-- `jvm_memory_used_bytes` - Memory usage by area
-- `jvm_memory_max_bytes` - Maximum memory available
-- `jvm_gc_pause_seconds` - GC pause duration
-- `jvm_gc_overhead` - GC overhead percentage
+### HTTP Request Metrics
+- Request count (total, by status code, by endpoint)
+- Request duration (histogram with p50, p95, p99)
+- Error rates (4xx, 5xx)
 
-### System Metrics
-- `system_cpu_usage` - System CPU usage
-- `process_cpu_usage` - Process CPU usage
-- `disk_free_bytes` - Free disk space
-- `disk_total_bytes` - Total disk space
+### Database Metrics
+- Connection pool size and utilization
+- Active/idle connections
+- Operation counts and duration
+- Connection errors and timeouts
 
-For a complete list of all metrics, see [METRICS_DOCUMENTATION.md](spring-webapi-db/METRICS_DOCUMENTATION.md).
+### Runtime Metrics
+- Memory usage (heap/non-heap)
+- CPU usage
+- Garbage collection (language-specific)
+- Thread/goroutine counts
 
-## Alert Rules
-
-The template includes pre-configured alerts for:
-
-### Critical Alerts
-- **ServiceUnavailable** - Application not responding
-- **DatabaseDown** - Database connection failure
-- **CriticalMemoryUsage** - JVM heap usage > 95%
-- **CriticalDiskSpace** - Disk space < 5%
-
-### Warning Alerts
-- **HighErrorRate** - Error rate > 5%
-- **HighLatency** - p95 latency > 1 second
-- **HighMemoryUsage** - JVM heap usage > 85%
-- **ConnectionPoolExhaustion** - Connection pool usage > 90%
-- **HighRequestRate** - Request rate spike > 2x baseline
-- **HighBusinessOperationErrorRate** - Business error rate > 10%
-
-View all alert rules in `deployments/prometheus/alerts.yml`.
+### Business Metrics
+- Domain operation counts
+- Operation duration
+- Error counts by type
+- External service call metrics
 
 ## Example Prometheus Queries
 
@@ -289,16 +211,6 @@ sum(rate(http_server_requests_total[5m])) * 100
 histogram_quantile(0.95, 
   sum(rate(http_server_requests_seconds_bucket[5m])) by (le, uri, method)
 )
-```
-
-### Memory Usage Percentage
-```promql
-(jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"}) * 100
-```
-
-### Connection Pool Utilization
-```promql
-(hikaricp_connections_active / hikaricp_connections_max) * 100
 ```
 
 ### Request Rate by Endpoint
@@ -319,7 +231,7 @@ sum(rate(http_server_requests_total[5m])) by (uri, method)
 
 1. Go to **Dashboards** → **New** → **New Dashboard**
 2. Add panels with Prometheus queries
-3. Use the metrics from `METRICS_DOCUMENTATION.md` as reference
+3. Use the metrics documentation from each project as reference
 
 ## Alertmanager
 
@@ -336,34 +248,7 @@ Access Alertmanager UI at `http://localhost:9093` to:
 Configure notification channels in `deployments/alertmanager/alertmanager.yml`:
 - **Webhooks** - HTTP POST to custom endpoints
 - **Email** - SMTP email notifications
-- **Slack** - Slack webhook integration (configure `slack_api_url`)
-
-## Development
-
-### Building the Application
-
-```bash
-mvn clean package
-```
-
-### Running Tests
-
-```bash
-mvn test
-```
-
-### Running Locally
-
-```bash
-mvn spring-boot:run
-```
-
-### Accessing Actuator Endpoints
-
-- Health: `http://localhost:8080/actuator/health`
-- Metrics: `http://localhost:8080/actuator/metrics`
-- Prometheus: `http://localhost:8080/actuator/prometheus`
-- Info: `http://localhost:8080/actuator/info`
+- **Slack** - Slack webhook integration
 
 ## Troubleshooting
 
@@ -371,7 +256,7 @@ mvn spring-boot:run
 
 1. Verify the application is running and accessible
 2. Check the target in Prometheus UI: `http://localhost:9090/targets`
-3. Verify the `metrics_path` is correct (`/actuator/prometheus`)
+3. Verify the `metrics_path` is correct for your technology stack
 4. Check network connectivity between Prometheus and the application
 5. Review Prometheus logs: `docker compose -f docker-compose.metrics.yml logs prometheus`
 
@@ -391,10 +276,14 @@ mvn spring-boot:run
 
 ### Application Metrics Not Appearing
 
-1. Verify Actuator is enabled: Check `application.properties`
-2. Verify Prometheus export is enabled: `management.prometheus.metrics.export.enabled=true`
-3. Check endpoint exposure: `management.endpoints.web.exposure.include=prometheus`
-4. Test metrics endpoint: `curl http://localhost:8080/actuator/prometheus`
+1. Verify metrics endpoint is enabled and accessible
+2. Check metrics endpoint path (varies by technology stack)
+3. Test metrics endpoint: `curl http://localhost:8080/<metrics-path>`
+4. Review application logs for metric collection errors
+
+For technology-specific troubleshooting, see:
+- [Spring Boot Troubleshooting](spring-webapi-db/README.md#troubleshooting)
+- [Go Troubleshooting](go-webapi-db/README.md#troubleshooting)
 
 ## Production Considerations
 
@@ -422,10 +311,13 @@ mvn spring-boot:run
 - Optimize alert rule evaluation intervals
 - Use recording rules for expensive queries
 
-## Documentation
+## Project-Specific Documentation
 
-- [METRICS_DOCUMENTATION.md](spring-webapi-db/METRICS_DOCUMENTATION.md) - Complete metrics reference
-- [HELP.md](spring-webapi-db/HELP.md) - Spring Boot getting started guide
+- **[Spring Boot Implementation](spring-webapi-db/README.md)** - Java/Spring Boot specific documentation
+- **[Go Implementation](go-webapi-db/README.md)** - Go/Gin specific documentation
+
+## External Documentation
+
 - [Prometheus Documentation](https://prometheus.io/docs/)
 - [Grafana Documentation](https://grafana.com/docs/)
 - [Alertmanager Documentation](https://prometheus.io/docs/alerting/latest/alertmanager/)
@@ -433,4 +325,3 @@ mvn spring-boot:run
 ## License
 
 This template is provided as-is for use in your projects.
-

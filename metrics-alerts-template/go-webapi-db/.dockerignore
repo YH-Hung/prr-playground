@@ -1,0 +1,35 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+README.md
+*.md
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+bin/
+dist/
+*.test
+
+# Go workspace
+go.work
+go.work.sum
+
+# Deployments (not needed in container)
+deployments/
+
+# Docker
+docker-compose*.yml
+Dockerfile
+.dockerignore
+
